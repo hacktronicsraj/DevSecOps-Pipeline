@@ -80,8 +80,14 @@ jobs:
           to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.EMAIL_FROM }}
           secure: true
-          html_body: |
-            <h1>SonarQube Analysis Report</h1>
-            <p><strong>Quality Gate Status:</strong> ${{ steps.getReport.outputs.status }}</p>
-            <p>Detailed report is attached.</p>
-          attachments: sonarqube_report.json
+          ignore_cert: true
+          connection_timeout: 10
+          timeout: 10
+          convert_markdown: true
+          priority: high
+          body: |
+            # SonarQube Analysis Report
+
+            **Quality Gate Status:** ${{ steps.getReport.outputs.status }}
+
+            Detailed report is attached.
