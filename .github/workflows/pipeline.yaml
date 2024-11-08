@@ -69,25 +69,17 @@ jobs:
           echo "Quality Gate Status: $status"
           echo "::set-output name=status::$status"
 
-      - name: Send Email with SonarQube Report
-        uses: dawidd6/action-send-mail@v3
+      - name: Send Email Report
+        uses: TeamXecours/email-action@v2
         with:
-          server_address: ${{ secrets.EMAIL_SERVER }}
-          server_port: ${{ secrets.EMAIL_PORT }}
+          server: smtp.gmail.com
+          port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "SonarQube Report for DevSecOps-Pipeline - ${{ steps.getReport.outputs.status }}"
-          to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.EMAIL_FROM }}
-          secure: true
-          ignore_cert: true
-          connection_timeout: 10
-          timeout: 10
-          convert_markdown: true
-          priority: high
+          to: ${{ secrets.EMAIL_TO }}
+          subject: "SonarQube Analysis Report"
           body: |
-            # SonarQube Analysis Report
-
-            **Quality Gate Status:** ${{ steps.getReport.outputs.status }}
-
-            Detailed report is attached.
+            SonarQube Analysis Complete
+            Status: ${{ steps.getReport.outputs.status }}
+          attachments: sonarqube_report.json
