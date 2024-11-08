@@ -1,0 +1,87 @@
+name: SonarQube Analysis and Email Report
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sonarqube:
+    name: SonarQube Analysis and Email Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Run SonarQube Scanner
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          # Download SonarQube Scanner
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+          unzip sonar-scanner-cli-4.8.0.2856-linux.zip
+          export PATH="$PATH:$(pwd)/sonar-scanner-4.8.0.2856-linux/bin"
+
+          # Run SonarQube Scanner
+          sonar-scanner \
+            -Dsonar.projectKey=DevSecOps-Pipeline \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
+
+      - name: Wait for SonarQube Analysis to Complete
+        id: ceTask
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          # Get the CE task ID from the scanner report
+          ceTaskUrl=$(grep -oP '(?<=ceTaskUrl=).*' ./.scannerwork/report-task.txt)
+          echo "CE Task URL: $ceTaskUrl"
+          # Poll the CE task until it's completed
+          status="PENDING"
+          while [ "$status" = "PENDING" ] || [ "$status" = "IN_PROGRESS" ]; do
+            sleep 5
+            response=$(curl -s -u $SONAR_TOKEN: "$ceTaskUrl")
+            status=$(echo "$response" | jq -r '.task.status')
+            echo "Current status: $status"
+          done
+          if [ "$status" != "SUCCESS" ]; then
+            echo "SonarQube analysis failed."
+            exit 1
+          fi
+          analysisId=$(echo "$response" | jq -r '.task.analysisId')
+          echo "::set-output name=analysisId::$analysisId"
+
+      - name: Get SonarQube Analysis Report
+        id: getReport
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          analysisId=${{ steps.ceTask.outputs.analysisId }}
+          reportUrl="$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$analysisId"
+          response=$(curl -s -u $SONAR_TOKEN: "$reportUrl")
+          echo "$response" > sonarqube_report.json
+          # Extract status
+          status=$(echo "$response" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $status"
+          echo "::set-output name=status::$status"
+
+      - name: Send Email with SonarQube Report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SERVER }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "SonarQube Report for DevSecOps-Pipeline - ${{ steps.getReport.outputs.status }}"
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          secure: true
+          html_body: |
+            <h1>SonarQube Analysis Report</h1>
+            <p><strong>Quality Gate Status:</strong> ${{ steps.getReport.outputs.status }}</p>
+            <p>Detailed report is attached.</p>
+          attachments: sonarqube_report.json
