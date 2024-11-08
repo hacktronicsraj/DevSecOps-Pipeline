@@ -70,7 +70,7 @@ jobs:
           echo "::set-output name=status::$status"
 
       - name: Send Email Report
-        uses: TeamXecours/email-action@v2
+        uses: AlexisMateo/sendmail-action@5
         with:
           server: smtp.gmail.com
           port: 465
