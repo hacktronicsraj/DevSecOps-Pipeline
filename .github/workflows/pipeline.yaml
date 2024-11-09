@@ -1,4 +1,4 @@
-name: SonarQube Analysis, Build, and Docker Deploy
+name: SonarQube Analysis and Docker Deploy
 
 on:
   push:
@@ -6,8 +6,9 @@ on:
       - main
 
 jobs:
-  build-and-test:
+  build-and-analyze:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build the project
+      - name: Build project
         run: npm run build
 
       - name: Run SonarQube Scanner
@@ -40,26 +41,28 @@ jobs:
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
 
-          # Extract details if available
+          # Capture the CE Task URL
           ceTaskUrl=$(grep -oP '(?<=ceTaskUrl=).*' ./.scannerwork/report-task.txt || echo "")
           echo "CE Task URL: $ceTaskUrl"
-          if [ -z "$ceTaskUrl" ]; then
-            echo "SonarQube Scanner did not produce an expected report. Please check the logs for issues."
-            exit 1
-          fi
+          echo "ceTaskUrl=$ceTaskUrl" >> $GITHUB_ENV
 
       - name: Wait for SonarQube Analysis and Send Email
-        if: failure()
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          CE_TASK_URL: ${{ env.ceTaskUrl }}
         run: |
+          if [ -z "$CE_TASK_URL" ]; then
+            echo "SonarQube analysis task URL not found. Exiting."
+            exit 1
+          fi
+
           # Poll the CE task until it's completed
           status="PENDING"
           while [ "$status" = "PENDING" ] || [ "$status" = "IN_PROGRESS" ]; do
             sleep 5
-            response=$(curl -s -u $SONAR_TOKEN: "$ceTaskUrl")
+            response=$(curl -s -u $SONAR_TOKEN: "$CE_TASK_URL")
             status=$(echo "$response" | jq -r '.task.status')
             echo "Current status: $status"
           done
@@ -69,27 +72,21 @@ jobs:
           fi
           analysisId=$(echo "$response" | jq -r '.task.analysisId')
 
-          # Retrieve SonarQube Analysis Report
+          # Get SonarQube Analysis Report
           reportUrl="$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$analysisId"
           response=$(curl -s -u $SONAR_TOKEN: "$reportUrl")
           echo "$response" > sonarqube_report.json
           status=$(echo "$response" | jq -r '.projectStatus.status')
 
-          # Configure and send email
-          echo "Sending email with SonarQube report..."
+          # Send Email with SonarQube Report
           echo "Quality Gate Status: $status"
-          steps.dawidd6_action_send_mail_v3 = {
-            server_address: "smtp.gmail.com",
-            server_port: "465",
-            username: $EMAIL_USERNAME,
-            password: $EMAIL_PASSWORD,
-            subject: "SonarQube Analysis Report - $status",
-            to: "rajshekar9230@gmail.com",
-            from: "amazonkosam221@gmail.com",
-            secure: "true",
-            html_body: "<h1>SonarQube Analysis Report</h1><p><strong>Quality Gate Status:</strong> $status</p><p>Detailed report is attached.</p>",
-            attachments: "sonarqube_report.json"
-          }
+          sendmail -s "SonarQube Analysis Report - $status" \
+                   -u "$EMAIL_USERNAME" \
+                   -p "$EMAIL_PASSWORD" \
+                   -t "recipient@example.com" \
+                   -f "$EMAIL_USERNAME" \
+                   -b "SonarQube Analysis Report:<br>Quality Gate Status: $status<br>Detailed report attached." \
+                   -a sonarqube_report.json
 
       - name: Build Docker image
         run: |
