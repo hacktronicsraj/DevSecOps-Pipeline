@@ -22,7 +22,6 @@ jobs:
           wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
           unzip sonar-scanner-cli-4.8.0.2856-linux.zip
           export PATH="$PATH:$(pwd)/sonar-scanner-4.8.0.2856-linux/bin"
-
           # Run SonarQube Scanner
           sonar-scanner \
             -Dsonar.projectKey=DevSecOps-Pipeline \
@@ -52,7 +51,7 @@ jobs:
             exit 1
           fi
           analysisId=$(echo "$response" | jq -r '.task.analysisId')
-          echo "::set-output name=analysisId::$analysisId"
+          echo "analysisId=$analysisId" >> $GITHUB_OUTPUT
 
       - name: Get SonarQube Analysis Report
         id: getReport
@@ -67,19 +66,21 @@ jobs:
           # Extract status
           status=$(echo "$response" | jq -r '.projectStatus.status')
           echo "Quality Gate Status: $status"
-          echo "::set-output name=status::$status"
+          echo "status=$status" >> $GITHUB_OUTPUT
 
-      - name: Send Email Report
-        uses: AlexisMateo/sendmail-action@5
+      - name: Send Email with SonarQube Report
+        uses: marketplace-actions/send-email@v1
         with:
-          server: smtp.gmail.com
-          port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
+          smtp-server: smtp.gmail.com
+          smtp-port: 587
+          smtp-username: ${{ secrets.EMAIL_USERNAME }}
+          smtp-password: ${{ secrets.EMAIL_PASSWORD }}
           from: ${{ secrets.EMAIL_FROM }}
           to: ${{ secrets.EMAIL_TO }}
-          subject: "SonarQube Analysis Report"
-          body: |
-            SonarQube Analysis Complete
-            Status: ${{ steps.getReport.outputs.status }}
+          subject: "SonarQube Analysis Report - ${{ steps.getReport.outputs.status }}"
+          html-body: |
+            <h1>SonarQube Analysis Report</h1>
+            <p><strong>Quality Gate Status:</strong> ${{ steps.getReport.outputs.status }}</p>
+            <p>Detailed report is attached.</p>
           attachments: sonarqube_report.json
+          secure: true
