@@ -69,18 +69,18 @@ jobs:
           echo "status=$status" >> $GITHUB_OUTPUT
 
       - name: Send Email with SonarQube Report
-        uses: marketplace-actions/send-email@v1
+        uses: dawidd6/action-send-mail@v3
         with:
-          smtp-server: smtp.gmail.com
-          smtp-port: 587
-          smtp-username: ${{ secrets.EMAIL_USERNAME }}
-          smtp-password: ${{ secrets.EMAIL_PASSWORD }}
-          from: ${{ secrets.EMAIL_FROM }}
-          to: ${{ secrets.EMAIL_TO }}
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "SonarQube Analysis Report - ${{ steps.getReport.outputs.status }}"
-          html-body: |
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          secure: true
+          html_body: |
             <h1>SonarQube Analysis Report</h1>
             <p><strong>Quality Gate Status:</strong> ${{ steps.getReport.outputs.status }}</p>
             <p>Detailed report is attached.</p>
           attachments: sonarqube_report.json
-          secure: true
