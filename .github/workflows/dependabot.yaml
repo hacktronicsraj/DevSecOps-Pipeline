@@ -1,0 +1,55 @@
+name: Dependabot Report and CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - ".github/dependabot.yml"
+
+jobs:
+  dependabot_report:
+    name: Dependabot Report
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Generate Dependabot Report
+        id: dependabot_report
+        run: |
+          # Gather information about the Dependabot PR
+          pr_number=${{ github.event.number }}
+          pr_title="${{ github.event.pull_request.title }}"
+          pr_body="${{ github.event.pull_request.body }}"
+          pr_url="${{ github.event.pull_request.html_url }}"
+          pr_author="${{ github.event.pull_request.user.login }}"
+
+          # Format the report as HTML content
+          echo "<h2>Dependabot Report for Pull Request #${pr_number}</h2>" > dependabot_report.html
+          echo "<p><strong>Title:</strong> ${pr_title}</p>" >> dependabot_report.html
+          echo "<p><strong>Author:</strong> ${pr_author}</p>" >> dependabot_report.html
+          echo "<p><strong>Details:</strong></p><pre>${pr_body}</pre>" >> dependabot_report.html
+          echo "<p><strong>PR URL:</strong> <a href='${pr_url}'>${pr_url}</a></p>" >> dependabot_report.html
+
+      - name: Send Dependabot Report via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          secure: true
+          subject: "Dependabot PR Update: ${{ github.event.pull_request.title }}"
+          html_body: |
+            $(cat dependabot_report.html)
