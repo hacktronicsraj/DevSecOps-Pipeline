@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
+      
       - name: Run SonarQube Scanner
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -28,7 +28,7 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
-
+      
       - name: Wait for SonarQube Analysis to Complete
         id: ceTask
         env:
@@ -92,17 +92,40 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
+      
       - name: Build Docker image
         run: |
           docker build -t rajashekar1/my-f1hub:${{ github.sha }} .
-
+      
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
+      
       - name: Push Docker image to Docker Hub
         run: |
           docker push rajashekar1/my-f1hub:${{ github.sha }}
+
+  trivy:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.32.0/trivy_0.32.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.32.0_Linux-64bit.deb
+
+      - name: Scan Docker Image with Trivy
+        env:
+          DOCKER_IMAGE: rajashekar1/my-f1hub:${{ github.sha }}
+        run: trivy image $DOCKER_IMAGE
+
+      - name: Upload Trivy Scan Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-report
+          path: results.txt
