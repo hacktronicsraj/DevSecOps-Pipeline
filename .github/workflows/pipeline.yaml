@@ -1,5 +1,4 @@
-name: SonarQube and Docker Pipeline
-
+name: DevSecOps-Pipeline
 on:
   push:
     branches:
@@ -108,7 +107,7 @@ jobs:
           docker push rajashekar1/my-f1hub:${{ github.sha }}
 
   trivy:
-    name: Trivy Vulnerability Scan
+    name: Trivy Vulnerability Scan and Email Report
     runs-on: ubuntu-latest
     needs: docker
     steps:
@@ -122,10 +121,20 @@ jobs:
       - name: Scan Docker Image with Trivy
         env:
           DOCKER_IMAGE: rajashekar1/my-f1hub:${{ github.sha }}
-        run: trivy image $DOCKER_IMAGE
+        run: trivy image $DOCKER_IMAGE > trivy-result.txt
 
-      - name: Upload Trivy Scan Results
-        uses: actions/upload-artifact@v3
+      - name: Send Email with Trivy Report
+        uses: dawidd6/action-send-mail@v3
         with:
-          name: trivy-report
-          path: results.txt
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Trivy Vulnerability Scan Report"
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          secure: true
+          html_body: |
+            <h1>Trivy Vulnerability Scan Report</h1>
+            <p>The vulnerability scan of the Docker image is complete. The full report is attached.</p>
+          attachments: trivy-result.txt
