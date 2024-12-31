@@ -138,3 +138,7 @@ jobs:
             <h1>Trivy Vulnerability Scan Report</h1>
             <p>The vulnerability scan of the Docker image is complete. The full report is attached.</p>
           attachments: trivy-result.txt
+
+
+
+          
